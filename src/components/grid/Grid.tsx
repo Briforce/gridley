@@ -157,6 +157,8 @@ export function Grid<TData>({
   const virtualItems = virtualizer.getVirtualItems()
   const totalWidth = table.getTotalSize()
   const colCount = table.getVisibleLeafColumns().length
+  const hasFilterRow = columnDefs.some((def) => def.filter)
+  const headerRowCount = hasFilterRow ? 2 : 1
 
   useEffect(() => {
     onSelectionChangedRef.current = onSelectionChanged
@@ -177,7 +179,7 @@ export function Grid<TData>({
   useEffect(() => {
     if (!pendingFocusRef.current || !activeCell) return
     const cell = scrollRef.current?.querySelector<HTMLElement>(
-      `[aria-rowindex="${activeCell.row + 2}"] [aria-colindex="${activeCell.col + 1}"]`,
+      `[aria-rowindex="${activeCell.row + headerRowCount + 1}"] [aria-colindex="${activeCell.col + 1}"]`,
     )
     if (cell) {
       pendingFocusRef.current = false
@@ -189,6 +191,27 @@ export function Grid<TData>({
     pendingFocusRef.current = true
     setActiveCell(position)
     virtualizer.scrollToIndex(position.row)
+  }
+
+  // Sizes a column to its widest rendered content (body cells + header label).
+  const autoSizeColumn = (columnId: string, colIndex: number) => {
+    const scrollEl = scrollRef.current
+    const column = table.getColumn(columnId)
+    if (!scrollEl || !column) return
+    let contentWidth = 0
+    const texts = scrollEl.querySelectorAll(
+      `.gridley-row [aria-colindex="${colIndex + 1}"] .gridley-cell-text, ` +
+        `.gridley-header [aria-colindex="${colIndex + 1}"] .gridley-header-text`,
+    )
+    texts.forEach((el) => {
+      contentWidth = Math.max(contentWidth, el.scrollWidth)
+    })
+    if (contentWidth === 0) return
+    const size = Math.max(
+      contentWidth + 25,
+      column.columnDef.minSize ?? DEFAULT_MIN_WIDTH,
+    )
+    table.setColumnSizing((prev) => ({ ...prev, [columnId]: size }))
   }
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -250,7 +273,7 @@ export function Grid<TData>({
   return (
     <div
       role="grid"
-      aria-rowcount={rows.length + 1}
+      aria-rowcount={rows.length + headerRowCount}
       aria-colcount={colCount}
       aria-multiselectable={rowSelection === 'multiple' || undefined}
       className={rootClassName}
@@ -262,83 +285,115 @@ export function Grid<TData>({
         ref={scrollRef}
         onKeyDown={handleKeyDown}
       >
-        <div
-          role="row"
-          aria-rowindex={1}
-          className="gridley-header"
-          style={{ minWidth: totalWidth }}
-        >
-          {table.getFlatHeaders().map((header, colIndex) => {
-            const column = header.column
-            const canSort = column.getCanSort()
-            const sorted = column.getIsSorted()
-            const label = flexRender(
-              column.columnDef.header,
-              header.getContext(),
-            )
-            return (
-              <div
-                key={header.id}
-                role="columnheader"
-                aria-colindex={colIndex + 1}
-                aria-sort={
-                  canSort
-                    ? sorted === 'asc'
-                      ? 'ascending'
-                      : sorted === 'desc'
-                        ? 'descending'
-                        : 'none'
-                    : undefined
-                }
-                className="gridley-header-cell"
-                style={{ width: header.getSize() }}
-              >
-                {canSort ? (
-                  <button
-                    type="button"
-                    className="gridley-sort-btn"
-                    onClick={column.getToggleSortingHandler()}
-                  >
-                    {label}
-                    {sorted && (
-                      <span className="gridley-sort-arrow" aria-hidden="true">
-                        {sorted === 'asc' ? '▲' : '▼'}
+        <div role="rowgroup" className="gridley-head">
+          <div
+            role="row"
+            aria-rowindex={1}
+            className="gridley-header"
+            style={{ minWidth: totalWidth }}
+          >
+            {table.getFlatHeaders().map((header, colIndex) => {
+              const column = header.column
+              const canSort = column.getCanSort()
+              const sorted = column.getIsSorted()
+              const label = flexRender(
+                column.columnDef.header,
+                header.getContext(),
+              )
+              return (
+                <div
+                  key={header.id}
+                  role="columnheader"
+                  aria-colindex={colIndex + 1}
+                  aria-sort={
+                    canSort
+                      ? sorted === 'asc'
+                        ? 'ascending'
+                        : sorted === 'desc'
+                          ? 'descending'
+                          : 'none'
+                      : undefined
+                  }
+                  className="gridley-header-cell"
+                  style={{ width: header.getSize() }}
+                >
+                  {canSort ? (
+                    <button
+                      type="button"
+                      className="gridley-sort-btn"
+                      onClick={column.getToggleSortingHandler()}
+                    >
+                      <span className="gridley-header-text">
+                        {label}
+                        {sorted && (
+                          <span
+                            className="gridley-sort-arrow"
+                            aria-hidden="true"
+                          >
+                            {sorted === 'asc' ? '▲' : '▼'}
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </button>
-                ) : (
-                  <span className="gridley-header-label">{label}</span>
-                )}
-                {column.getCanFilter() && (
-                  <input
-                    type="text"
-                    className="gridley-filter"
-                    aria-label={`Filter ${
-                      typeof column.columnDef.header === 'string'
-                        ? column.columnDef.header
-                        : column.id
-                    }`}
-                    value={(column.getFilterValue() as string) ?? ''}
-                    onChange={(event) =>
-                      column.setFilterValue(event.target.value || undefined)
-                    }
-                  />
-                )}
-                {column.getCanResize() && (
+                    </button>
+                  ) : (
+                    <span className="gridley-header-label">
+                      <span className="gridley-header-text">{label}</span>
+                    </span>
+                  )}
+                  {column.getCanResize() && (
+                    <div
+                      aria-hidden="true"
+                      className={
+                        column.getIsResizing()
+                          ? 'gridley-resizer is-resizing'
+                          : 'gridley-resizer'
+                      }
+                      onMouseDown={header.getResizeHandler()}
+                      onTouchStart={header.getResizeHandler()}
+                      onDoubleClick={() => autoSizeColumn(column.id, colIndex)}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {hasFilterRow && (
+            <div
+              role="row"
+              aria-rowindex={2}
+              className="gridley-filter-row"
+              style={{ minWidth: totalWidth }}
+            >
+              {table.getFlatHeaders().map((header, colIndex) => {
+                const column = header.column
+                return (
                   <div
-                    aria-hidden="true"
-                    className={
-                      column.getIsResizing()
-                        ? 'gridley-resizer is-resizing'
-                        : 'gridley-resizer'
-                    }
-                    onMouseDown={header.getResizeHandler()}
-                    onTouchStart={header.getResizeHandler()}
-                  />
-                )}
-              </div>
-            )
-          })}
+                    key={header.id}
+                    role="gridcell"
+                    aria-colindex={colIndex + 1}
+                    className="gridley-filter-cell"
+                    style={{ width: header.getSize() }}
+                  >
+                    {column.getCanFilter() && (
+                      <input
+                        type="text"
+                        className="gridley-filter"
+                        aria-label={`Filter ${
+                          typeof column.columnDef.header === 'string'
+                            ? column.columnDef.header
+                            : column.id
+                        }`}
+                        value={(column.getFilterValue() as string) ?? ''}
+                        onChange={(event) =>
+                          column.setFilterValue(event.target.value || undefined)
+                        }
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
         <div
           role="rowgroup"
@@ -352,7 +407,7 @@ export function Grid<TData>({
               <div
                 key={row.id}
                 role="row"
-                aria-rowindex={virtualItem.index + 2}
+                aria-rowindex={virtualItem.index + headerRowCount + 1}
                 aria-selected={rowSelection ? selected : undefined}
                 className={selected ? 'gridley-row is-selected' : 'gridley-row'}
                 style={{
@@ -388,10 +443,12 @@ export function Grid<TData>({
                         )
                       }
                     >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
+                      <span className="gridley-cell-text">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </span>
                     </div>
                   )
                 })}
