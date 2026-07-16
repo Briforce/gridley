@@ -13,6 +13,8 @@ export interface GridColumnDef<TData> {
   sortable?: boolean
   /** Whether the column can be resized by dragging its edge. Defaults to true. */
   resizable?: boolean
+  /** Shows a text filter input under the header label. Defaults to false. */
+  filter?: boolean
   /** Formats the raw cell value into display text. */
   valueFormatter?: (value: unknown, row: TData) => string
   /** Renders custom cell content; takes precedence over valueFormatter. */
@@ -28,5 +30,12 @@ export interface GridProps<TData> {
   rowHeight?: number
   /** Stable row id. Defaults to the row index. */
   getRowId?: (data: TData, index: number) => string
+  /**
+   * Enables row selection. 'single' selects one row via click; 'multiple'
+   * adds a checkbox column and allows any number of selected rows.
+   */
+  rowSelection?: 'single' | 'multiple'
+  /** Called with the currently selected row data whenever selection changes. */
+  onSelectionChanged?: (selectedRows: TData[]) => void
   className?: string
 }
