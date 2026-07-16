@@ -7,6 +7,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import type {
+  Column,
   ColumnDef,
   RowSelectionState,
   SortingState,
@@ -103,6 +104,33 @@ interface CellPosition {
   col: number
 }
 
+function columnLabel<TData>(column: Column<TData, unknown>): string {
+  return typeof column.columnDef.header === 'string'
+    ? column.columnDef.header
+    : column.id
+}
+
+// Pinned cells stick to the left edge during horizontal scroll; the offset
+// is the summed width of the pinned columns before them.
+function pinProps<TData>(column: Column<TData, unknown>): {
+  className: string
+  style: React.CSSProperties | undefined
+} {
+  if (column.getIsPinned() !== 'left') {
+    return { className: '', style: undefined }
+  }
+  return {
+    className: column.getIsLastColumn('left')
+      ? ' is-pinned is-pinned-last'
+      : ' is-pinned',
+    style: {
+      position: 'sticky',
+      left: column.getStart('left'),
+      zIndex: 1,
+    },
+  }
+}
+
 export function Grid<TData>({
   rowData,
   columnDefs,
@@ -130,10 +158,24 @@ export function Grid<TData>({
     return cols
   }, [columnDefs, rowSelection])
 
+  const pinnedLeft = useMemo(() => {
+    const ids: string[] = columnDefs
+      .filter((def) => def.pinned === 'left')
+      .map((def) => def.field)
+    if (ids.length > 0 && rowSelection === 'multiple') {
+      ids.unshift(SELECT_COLUMN_ID)
+    }
+    return ids
+  }, [columnDefs, rowSelection])
+
   const table = useReactTable({
     data: rowData,
     columns,
-    state: { sorting, rowSelection: rowSelectionState },
+    state: {
+      sorting,
+      rowSelection: rowSelectionState,
+      columnPinning: { left: pinnedLeft, right: [] },
+    },
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelectionState,
     enableRowSelection: rowSelection != null,
@@ -214,6 +256,26 @@ export function Grid<TData>({
     table.setColumnSizing((prev) => ({ ...prev, [columnId]: size }))
   }
 
+  const handleResizerKeyDown = (
+    event: React.KeyboardEvent,
+    column: Column<TData, unknown>,
+    colIndex: number,
+  ) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      autoSizeColumn(column.id, colIndex)
+      return
+    }
+    const step = event.key === 'ArrowLeft' ? -10 : event.key === 'ArrowRight' ? 10 : 0
+    if (step === 0) return
+    event.preventDefault()
+    const size = Math.max(
+      column.getSize() + step,
+      column.columnDef.minSize ?? DEFAULT_MIN_WIDTH,
+    )
+    table.setColumnSizing((prev) => ({ ...prev, [column.id]: size }))
+  }
+
   const handleKeyDown = (event: React.KeyboardEvent) => {
     const target = event.target as HTMLElement
     if (target.getAttribute('role') !== 'gridcell') return
@@ -252,6 +314,16 @@ export function Grid<TData>({
         col = lastCol
         if (event.ctrlKey) row = lastRow
         break
+      case 'PageDown':
+      case 'PageUp': {
+        const viewport = scrollRef.current?.clientHeight ?? 0
+        const pageSize = Math.max(1, Math.floor(viewport / rowHeight) - 2)
+        row =
+          event.key === 'PageDown'
+            ? Math.min(row + pageSize, lastRow)
+            : Math.max(row - pageSize, 0)
+        break
+      }
       default:
         return
     }
@@ -300,6 +372,7 @@ export function Grid<TData>({
                 column.columnDef.header,
                 header.getContext(),
               )
+              const pin = pinProps(column)
               return (
                 <div
                   key={header.id}
@@ -314,8 +387,8 @@ export function Grid<TData>({
                           : 'none'
                       : undefined
                   }
-                  className="gridley-header-cell"
-                  style={{ width: header.getSize() }}
+                  className={`gridley-header-cell${pin.className}`}
+                  style={{ width: header.getSize(), ...pin.style }}
                 >
                   {canSort ? (
                     <button
@@ -347,7 +420,12 @@ export function Grid<TData>({
                   )}
                   {column.getCanResize() && (
                     <div
-                      aria-hidden="true"
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label={`Resize ${columnLabel(column)} column`}
+                      aria-valuenow={Math.round(header.getSize())}
+                      aria-valuemin={column.columnDef.minSize ?? DEFAULT_MIN_WIDTH}
+                      tabIndex={0}
                       className={
                         column.getIsResizing()
                           ? 'gridley-resizer is-resizing'
@@ -356,6 +434,9 @@ export function Grid<TData>({
                       onMouseDown={header.getResizeHandler()}
                       onTouchStart={header.getResizeHandler()}
                       onDoubleClick={() => autoSizeColumn(column.id, colIndex)}
+                      onKeyDown={(event) =>
+                        handleResizerKeyDown(event, column, colIndex)
+                      }
                     />
                   )}
                 </div>
@@ -371,23 +452,20 @@ export function Grid<TData>({
             >
               {table.getFlatHeaders().map((header, colIndex) => {
                 const column = header.column
+                const pin = pinProps(column)
                 return (
                   <div
                     key={header.id}
                     role="gridcell"
                     aria-colindex={colIndex + 1}
-                    className="gridley-filter-cell"
-                    style={{ width: header.getSize() }}
+                    className={`gridley-filter-cell${pin.className}`}
+                    style={{ width: header.getSize(), ...pin.style }}
                   >
                     {column.getCanFilter() && (
                       <input
                         type="text"
                         className="gridley-filter"
-                        aria-label={`Filter ${
-                          typeof column.columnDef.header === 'string'
-                            ? column.columnDef.header
-                            : column.id
-                        }`}
+                        aria-label={`Filter ${columnLabel(column)}`}
                         value={(column.getFilterValue() as string) ?? ''}
                         onChange={(event) =>
                           column.setFilterValue(event.target.value || undefined)
@@ -400,6 +478,11 @@ export function Grid<TData>({
             </div>
           )}
         </div>
+        {rows.length === 0 && (
+          <div className="gridley-empty" role="status">
+            No rows to show
+          </div>
+        )}
         <div
           role="rowgroup"
           className="gridley-body"
@@ -430,14 +513,15 @@ export function Grid<TData>({
                     !activeRowRendered &&
                     virtualItem.index === virtualItems[0]?.index &&
                     colIndex === 0
+                  const pin = pinProps(cell.column)
                   return (
                     <div
                       key={cell.id}
                       role="gridcell"
                       aria-colindex={colIndex + 1}
                       tabIndex={isActive || isFallbackTabStop ? 0 : -1}
-                      className="gridley-cell"
-                      style={{ width: cell.column.getSize() }}
+                      className={`gridley-cell${pin.className}`}
+                      style={{ width: cell.column.getSize(), ...pin.style }}
                       onFocus={() =>
                         setActiveCell((prev) =>
                           prev &&

@@ -43,7 +43,7 @@ function generatePeople(count: number): Person[] {
 const people = generatePeople(10_000)
 
 const columnDefs: GridColumnDef<Person>[] = [
-  { field: 'id', headerName: 'ID', width: 80 },
+  { field: 'id', headerName: 'ID', width: 80, pinned: 'left' },
   { field: 'name', filter: true },
   { field: 'age', width: 90 },
   { field: 'email', width: 280, filter: true },

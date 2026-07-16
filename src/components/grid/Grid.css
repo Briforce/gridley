@@ -138,6 +138,28 @@
   &.is-resizing {
     background: var(--accent-border);
   }
+
+  &:focus-visible {
+    outline: none;
+    background: var(--accent);
+  }
+}
+
+.gridley-head .is-pinned {
+  background: var(--code-bg);
+  z-index: 1;
+}
+
+.gridley-header-cell.is-pinned-last,
+.gridley-filter-cell.is-pinned-last,
+.gridley-cell.is-pinned-last {
+  border-right: 2px solid var(--border);
+}
+
+.gridley-empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text);
 }
 
 .gridley-row {
@@ -187,4 +209,22 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Pinned body cells need opaque backgrounds that mirror the row state so
+   scrolling content disappears beneath them. */
+.gridley-cell.is-pinned {
+  background: var(--bg);
+}
+
+.gridley-row:hover .gridley-cell.is-pinned {
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+}
+
+.gridley-row.is-selected .gridley-cell.is-pinned {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg));
+}
+
+.gridley-row.is-selected:hover .gridley-cell.is-pinned {
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg));
 }
