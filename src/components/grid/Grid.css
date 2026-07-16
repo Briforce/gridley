@@ -156,6 +156,20 @@
   border-right: 2px solid var(--border);
 }
 
+.gridley-header-cell.is-pinned-first,
+.gridley-filter-cell.is-pinned-first,
+.gridley-cell.is-pinned-first {
+  border-left: 2px solid var(--border);
+}
+
+.gridley-header-cell.is-dragging {
+  opacity: 0.5;
+}
+
+.gridley-header-cell.is-drop-target {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .gridley-empty {
   padding: 40px 16px;
   text-align: center;

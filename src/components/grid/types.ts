@@ -16,11 +16,11 @@ export interface GridColumnDef<TData> {
   /** Shows a text filter input under the header label. Defaults to false. */
   filter?: boolean
   /**
-   * Pins the column to the left edge so it stays visible during horizontal
-   * scroll. When any column is pinned, the selection checkbox column is
-   * pinned automatically.
+   * Pins the column to the left or right edge so it stays visible during
+   * horizontal scroll. When any column is pinned left, the selection
+   * checkbox column is pinned left automatically.
    */
-  pinned?: 'left'
+  pinned?: 'left' | 'right'
   /** Formats the raw cell value into display text. */
   valueFormatter?: (value: unknown, row: TData) => string
   /** Renders custom cell content; takes precedence over valueFormatter. */

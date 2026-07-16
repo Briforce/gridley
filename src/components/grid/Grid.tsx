@@ -110,22 +110,35 @@ function columnLabel<TData>(column: Column<TData, unknown>): string {
     : column.id
 }
 
-// Pinned cells stick to the left edge during horizontal scroll; the offset
-// is the summed width of the pinned columns before them.
+// Pinned cells stick to their edge during horizontal scroll; the offset is
+// the summed width of the pinned columns between them and that edge.
 function pinProps<TData>(column: Column<TData, unknown>): {
   className: string
   style: React.CSSProperties | undefined
 } {
-  if (column.getIsPinned() !== 'left') {
+  const pinned = column.getIsPinned()
+  if (!pinned) {
     return { className: '', style: undefined }
   }
+  if (pinned === 'left') {
+    return {
+      className: column.getIsLastColumn('left')
+        ? ' is-pinned is-pinned-last'
+        : ' is-pinned',
+      style: {
+        position: 'sticky',
+        left: column.getStart('left'),
+        zIndex: 1,
+      },
+    }
+  }
   return {
-    className: column.getIsLastColumn('left')
-      ? ' is-pinned is-pinned-last'
+    className: column.getIsFirstColumn('right')
+      ? ' is-pinned is-pinned-first'
       : ' is-pinned',
     style: {
       position: 'sticky',
-      left: column.getStart('left'),
+      right: column.getAfter('right'),
       zIndex: 1,
     },
   }
@@ -144,6 +157,9 @@ export function Grid<TData>({
   const [sorting, setSorting] = useState<SortingState>([])
   const [rowSelectionState, setRowSelectionState] =
     useState<RowSelectionState>({})
+  const [columnOrder, setColumnOrder] = useState<string[]>([])
+  const [dragColumnId, setDragColumnId] = useState<string | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const [activeCell, setActiveCell] = useState<CellPosition | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const pendingFocusRef = useRef(false)
@@ -158,14 +174,17 @@ export function Grid<TData>({
     return cols
   }, [columnDefs, rowSelection])
 
-  const pinnedLeft = useMemo(() => {
-    const ids: string[] = columnDefs
+  const columnPinning = useMemo(() => {
+    const left: string[] = columnDefs
       .filter((def) => def.pinned === 'left')
       .map((def) => def.field)
-    if (ids.length > 0 && rowSelection === 'multiple') {
-      ids.unshift(SELECT_COLUMN_ID)
+    if (left.length > 0 && rowSelection === 'multiple') {
+      left.unshift(SELECT_COLUMN_ID)
     }
-    return ids
+    const right: string[] = columnDefs
+      .filter((def) => def.pinned === 'right')
+      .map((def) => def.field)
+    return { left, right }
   }, [columnDefs, rowSelection])
 
   const table = useReactTable({
@@ -174,10 +193,12 @@ export function Grid<TData>({
     state: {
       sorting,
       rowSelection: rowSelectionState,
-      columnPinning: { left: pinnedLeft, right: [] },
+      columnPinning,
+      columnOrder,
     },
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelectionState,
+    onColumnOrderChange: setColumnOrder,
     enableRowSelection: rowSelection != null,
     enableMultiRowSelection: rowSelection === 'multiple',
     getCoreRowModel: getCoreRowModel(),
@@ -255,6 +276,31 @@ export function Grid<TData>({
     )
     table.setColumnSizing((prev) => ({ ...prev, [columnId]: size }))
   }
+
+  // Moves the dragged column to the drop target's position. Reordering is
+  // only allowed within the same pin group so pinned blocks stay coherent.
+  const moveColumn = (fromId: string, toId: string) => {
+    if (fromId === toId) return
+    const from = table.getColumn(fromId)
+    const to = table.getColumn(toId)
+    if (!from || !to || from.getIsPinned() !== to.getIsPinned()) return
+    const order =
+      columnOrder.length > 0
+        ? [...columnOrder]
+        : table.getAllLeafColumns().map((column) => column.id)
+    const fromIndex = order.indexOf(fromId)
+    const toIndex = order.indexOf(toId)
+    if (fromIndex === -1 || toIndex === -1) return
+    order.splice(fromIndex, 1)
+    order.splice(toIndex, 0, fromId)
+    setColumnOrder(order)
+  }
+
+  const canDropOn = (targetId: string) =>
+    dragColumnId != null &&
+    dragColumnId !== targetId &&
+    table.getColumn(dragColumnId)?.getIsPinned() ===
+      table.getColumn(targetId)?.getIsPinned()
 
   const handleResizerKeyDown = (
     event: React.KeyboardEvent,
@@ -373,6 +419,10 @@ export function Grid<TData>({
                 header.getContext(),
               )
               const pin = pinProps(column)
+              const draggable = column.id !== SELECT_COLUMN_ID
+              const dragClassName =
+                (dragColumnId === column.id ? ' is-dragging' : '') +
+                (dropTargetId === column.id ? ' is-drop-target' : '')
               return (
                 <div
                   key={header.id}
@@ -387,8 +437,40 @@ export function Grid<TData>({
                           : 'none'
                       : undefined
                   }
-                  className={`gridley-header-cell${pin.className}`}
+                  className={`gridley-header-cell${pin.className}${dragClassName}`}
                   style={{ width: header.getSize(), ...pin.style }}
+                  draggable={draggable}
+                  onDragStart={(event) => {
+                    // A mousedown on the resize handle sets the resizing state
+                    // before dragstart fires; cancel the native drag so the
+                    // resize keeps receiving mouse moves.
+                    if (table.getState().columnSizingInfo.isResizingColumn) {
+                      event.preventDefault()
+                      return
+                    }
+                    event.dataTransfer.setData('text/plain', column.id)
+                    event.dataTransfer.effectAllowed = 'move'
+                    setDragColumnId(column.id)
+                  }}
+                  onDragOver={(event) => {
+                    if (!canDropOn(column.id)) return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'move'
+                    setDropTargetId(column.id)
+                  }}
+                  onDragLeave={() =>
+                    setDropTargetId((id) => (id === column.id ? null : id))
+                  }
+                  onDrop={(event) => {
+                    event.preventDefault()
+                    if (dragColumnId) moveColumn(dragColumnId, column.id)
+                    setDragColumnId(null)
+                    setDropTargetId(null)
+                  }}
+                  onDragEnd={() => {
+                    setDragColumnId(null)
+                    setDropTargetId(null)
+                  }}
                 >
                   {canSort ? (
                     <button
@@ -437,6 +519,10 @@ export function Grid<TData>({
                       onKeyDown={(event) =>
                         handleResizerKeyDown(event, column, colIndex)
                       }
+                      onDragStart={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                      }}
                     />
                   )}
                 </div>

@@ -51,6 +51,7 @@ const columnDefs: GridColumnDef<Person>[] = [
   {
     field: 'score',
     width: 100,
+    pinned: 'right',
     valueFormatter: (value) => Number(value).toFixed(1),
   },
 ]
