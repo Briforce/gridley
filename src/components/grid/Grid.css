@@ -1,0 +1,114 @@
+.gridley {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.3;
+  text-align: left;
+  overflow: hidden;
+}
+
+.gridley-scroll {
+  position: relative;
+  height: 100%;
+  overflow: auto;
+}
+
+.gridley-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.gridley-header-cell {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  color: var(--text-h);
+  font-weight: 500;
+  overflow: hidden;
+
+  &:not(:last-child) {
+    border-right: 1px solid var(--border);
+  }
+}
+
+.gridley-sort-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 8px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &:hover {
+    background: var(--accent-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+}
+
+.gridley-sort-arrow {
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.gridley-header-label {
+  padding: 8px 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gridley-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+
+  &:hover,
+  &.is-resizing {
+    background: var(--accent-border);
+  }
+}
+
+.gridley-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+
+  &:hover {
+    background: var(--accent-bg);
+  }
+}
+
+.gridley-cell {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
