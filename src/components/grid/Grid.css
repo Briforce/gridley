@@ -51,6 +51,7 @@
   padding: 8px 12px;
   cursor: pointer;
   overflow: hidden;
+  user-select: none;
 
   &:hover {
     background: var(--accent-bg);
@@ -73,6 +74,12 @@
 
 .gridley-sort-arrow {
   font-size: 10px;
+  color: var(--accent);
+}
+
+.gridley-sort-order {
+  font-size: 10px;
+  font-weight: 600;
   color: var(--accent);
 }
 

@@ -333,6 +333,11 @@ export function Grid<TData>({
                             {sorted === 'asc' ? '▲' : '▼'}
                           </span>
                         )}
+                        {sorted && sorting.length > 1 && (
+                          <span className="gridley-sort-order">
+                            {column.getSortIndex() + 1}
+                          </span>
+                        )}
                       </span>
                     </button>
                   ) : (
